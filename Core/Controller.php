@@ -6,15 +6,10 @@ use Core\Request;
 
 class                           Controller
 {
-    protected                   $request;
-
-    public function             __construct()
-    {
-        $this->request = new Request();
-    }
+    public                      $request;
     
-    public function             getRequest()
+    public function             setRequest(Request &$request)
     {
-        return $this->request;
+        $this->request = $request;
     }
 }

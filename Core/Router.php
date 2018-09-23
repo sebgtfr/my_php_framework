@@ -6,7 +6,37 @@ class                           Router
 {
     private static              $routes = array();
     
-    static private function     splitResourceAndParams($url)
+    const                       CALLBACK_FUNCTION = 0;
+    const                       CALLBACK_OBJECT = 1;
+    
+    /**
+     * @params                  array $routes : Array of all routes file by HTTP request type.
+     * 
+     * @description             Get all route know by the router file by HTTP request type.
+     */
+    static public function      getRoutes()
+    {
+        $routes = array();
+        
+        foreach (self::$routes as $typeURL => $route)
+        {
+            $aTypeURL = explode(':', $typeURL);
+            $url = ($aTypeURL[1] === '/') ? $aTypeURL[1] : ($aTypeURL[1] . '/');
+            foreach (array_keys($route) as $urlParams)
+            {
+                $routes[$aTypeURL[0]][] = "{$url}{$urlParams}";
+            }
+        }
+        return $routes;
+    }
+
+    /**
+     * @params                  string $url : url route need to split.
+     * 
+     * @description             Slit the route url define in parameter in order to
+     *                          get the resource side and the parameters side.
+     */
+    static private function     splitResourceAndParams(string $url)
     {        
         $aResourceParams = array('resource' => null, 'params' => null);
         if (($pos = strpos($url, '$')) !== FALSE)
@@ -25,29 +55,119 @@ class                           Router
         return $aResourceParams;
     }
     
-    static public function      connect($url, $route)
+    /**
+     * @param                   string $url : url of the route
+     * @param                   string $route : controller route format "[ObjectName]/[MethodName]".
+     * @param                   callable $route : any function use as a callback.
+     * @param                   string $typeRequestHTTP : HTTP type of the request.
+     */
+    static public function      connect(string $url, $route, string $typeRequestHTTP)
     {
         $aResourceParams = Router::splitResourceAndParams($url);
         
-        if (!array_key_exists($aResourceParams['resource'], self::$routes))
+        $resource = strtoupper($typeRequestHTTP) . ":{$aResourceParams['resource']}";
+        if (!array_key_exists($resource, self::$routes))
         {
-            self::$routes[$aResourceParams['resource']] = array();
+            self::$routes[$resource] = array();
         }
-        self::$routes[$aResourceParams['resource']][$aResourceParams['params']] = $route;
+        self::$routes[$resource][$aResourceParams['params']] = $route;
     }
     
-    static public function      get($url)
+    /**
+     * @description             Alias of Router::connect with HTTP type request as "GET".
+     */
+    static public function      get(string $url, $route)
+    {
+        Router::connect($url, $route, "GET");
+    }
+    
+    /**
+     * @description             Alias of Router::connect with HTTP type request as "POST".
+     */
+    static public function      post(string $url, $route)
+    {
+        Router::connect($url, $route, "POST");
+    }
+    
+    /**
+     * @description             Alias of Router::connect with HTTP type request as "PUT".
+     */
+    static public function      put(string $url, $route)
+    {
+        Router::connect($url, $route, "PUT");
+    }
+    
+    /**
+     * @description             Alias of Router::connect with HTTP type request as "DELETE".
+     */
+    static public function      delete(string $url, $route)
+    {
+        Router::connect($url, $route, "DELETE");
+    }
+    
+    /**
+     * @param                   array $response : Array fill with url parameters, use for generate final response.
+     * @param                   string $controllerRoute : Name of the route's callback or name of the controller object with his method's action
+     * @param                   Closure $controllerRoute : instance of the route's callback
+     * @return                  array $response : Datas informations of the route and his controller.
+     * 
+     * @description             prepare router's response filling array with route and controller's datas.
+     */
+    static private function     setController(array $response, $controllerRoute)
+    {
+        if (is_string($controllerRoute))
+        {
+            $response['typeController'] = self::CALLBACK_OBJECT;
+            $controller = explode('/', $controllerRoute);
+            $lenController = count($controller);
+            
+            if ($lenController == 1 && is_callable($controller[0]))
+            {
+                $response['typeController'] = self::CALLBACK_FUNCTION;
+                $response['controllerCallback'] = $controller[0];
+            }
+            else if ($lenController == 2)
+            {
+                $response['typeController'] = self::CALLBACK_OBJECT;
+                $response['controllerName'] = "\\src\\Controller\\" . ucfirst($controller[0]);
+                $response['controllerMethod'] = $controller[1];
+            }
+            else
+            {
+                throw new \ParseError("Route undefined !");
+            }
+        }
+        else if (is_callable($controllerRoute))
+        {
+            $response['typeController'] = self::CALLBACK_FUNCTION;
+            $response['controllerCallback'] = $controllerRoute;
+        }
+        else
+        {
+            throw new \ParseError("Route undefined !");
+        }
+        return $response;
+    }
+    
+    /**
+     * @param                   string $url : URL of the controller's route.
+     * @param                   string $typeRequestHTTP : Type of the HTTP's request.
+     * @return                  array $response : Datas informations of the route and his controller.
+     * 
+     * @description             Search route and controller's datas using the URL and the HTTP type of the request.
+     */
+    static public function      getController(string $url, string $typeRequestHTTP)
     {
         $resource = '';
         $aFragUrl = explode('/', trim($url, '/'));
         $nbFragUrl = count($aFragUrl);
-        $response = array('controllerName' => null, 'controllerMethod' => null, 'params' => null);
+        $response = array('params' => null);
         for ($i = 0; $i < $nbFragUrl; ++$i)
         {
             $resource .= "/{$aFragUrl[$i]}";
-            if (array_key_exists($resource, self::$routes))
+            if (array_key_exists("{$typeRequestHTTP}:{$resource}", self::$routes))
             {
-                foreach (self::$routes[$resource] as $controllerParams => $controllerRoute)
+                foreach (self::$routes["{$typeRequestHTTP}:{$resource}"] as $controllerParams => $controllerRoute)
                 {
                     $response['params'] = array();
                     $params = (empty($controllerParams)) ? array() : explode('/', $controllerParams);
@@ -79,22 +199,18 @@ class                           Router
                             }
                             if ($j === $nbFragUrl)
                             {
-                                $response['controllerName'] = "\\src\\Controller\\" . ucfirst($controllerRoute['controller']) . "Controller";
-                                $response['controllerMethod'] = "{$controllerRoute['action']}Action";
-                                return $response;
+                                return self::setController($response, $controllerRoute);
                             }
                         }
                         else
                         {
-                            $response['controllerName'] = "\\src\\Controller\\" . ucfirst($controllerRoute['controller']) . "Controller";
-                            $response['controllerMethod'] = "{$controllerRoute['action']}Action";
-                            return $response;
+                            return self::setController($response, $controllerRoute);
                         }
                     }
                 }
             }
         }
-        return null;
+        throw new \Exception("Route not found");
     }
 
 }

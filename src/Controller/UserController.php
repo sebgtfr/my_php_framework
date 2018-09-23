@@ -6,14 +6,14 @@ use Core\Controller;
 
 class                           UserController extends Controller
 {
-    public function             indexAction()
+    public function             index()
     {
         echo __METHOD__;
     }
     
-    public function             meAction($id)
+    public function             me($id)
     {
-        echo __METHOD__;
+        echo __METHOD__ . PHP_EOL;
         echo "id = $id";
     }
 }
