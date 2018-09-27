@@ -17,14 +17,19 @@ class                           Router
     static public function      getRoutes()
     {
         $routes = array();
-        
         foreach (self::$routes as $typeURL => $route)
         {
-            $aTypeURL = explode(':', $typeURL);
-            $url = ($aTypeURL[1] === '/') ? $aTypeURL[1] : ($aTypeURL[1] . '/');
-            foreach (array_keys($route) as $urlParams)
+            $routes[$typeURL] = array();
+            foreach ($route as $url => $params)
             {
-                $routes[$aTypeURL[0]][] = "{$url}{$urlParams}";
+                foreach (array_keys($params) as $urlParams)
+                {
+                    if (!empty($urlParams))
+                    {
+                        $urlParams = "/{$urlParams}";
+                    }
+                    $routes[$typeURL][] = "{$url}{$urlParams}";
+                }
             }
         }
         return $routes;
@@ -63,14 +68,18 @@ class                           Router
      */
     static public function      connect(string $url, $route, string $typeRequestHTTP)
     {
+        $typeRequestHTTP = strtoupper($typeRequestHTTP); // Make sure that Request is uppercase
         $aResourceParams = Router::splitResourceAndParams($url);
         
-        $resource = strtoupper($typeRequestHTTP) . ":{$aResourceParams['resource']}";
-        if (!array_key_exists($resource, self::$routes))
+        if (!array_key_exists($typeRequestHTTP, self::$routes))
         {
-            self::$routes[$resource] = array();
+            self::$routes[$typeRequestHTTP] = array();
         }
-        self::$routes[$resource][$aResourceParams['params']] = $route;
+        if (!array_key_exists($aResourceParams['resource'], self::$routes[$typeRequestHTTP]))
+        {
+            self::$routes[$typeRequestHTTP][$aResourceParams['resource']] = array();
+        }
+        self::$routes[$typeRequestHTTP][$aResourceParams['resource']][$aResourceParams['params']] = $route;
     }
     
     /**
@@ -158,53 +167,57 @@ class                           Router
      */
     static public function      getController(string $url, string $typeRequestHTTP)
     {
-        $resource = '';
-        $aFragUrl = explode('/', trim($url, '/'));
-        $nbFragUrl = count($aFragUrl);
-        $response = array('params' => null);
-        for ($i = 0; $i < $nbFragUrl; ++$i)
-        {
-            $resource .= "/{$aFragUrl[$i]}";
-            if (array_key_exists("{$typeRequestHTTP}:{$resource}", self::$routes))
+        $typeRequestHTTP = strtoupper($typeRequestHTTP); // Make sure that Request is uppercase
+        if (array_key_exists($typeRequestHTTP, self::$routes))
+        {   
+            $resource = '';
+            $aFragUrl = explode('/', trim($url, '/'));
+            $nbFragUrl = count($aFragUrl);
+            $response = array('params' => null);
+            for ($i = 0; $i < $nbFragUrl; ++$i)
             {
-                foreach (self::$routes["{$typeRequestHTTP}:{$resource}"] as $controllerParams => $controllerRoute)
+                $resource .= "/{$aFragUrl[$i]}";
+                if (array_key_exists($resource, self::$routes[$typeRequestHTTP]))
                 {
-                    $response['params'] = array();
-                    $params = (empty($controllerParams)) ? array() : explode('/', $controllerParams);
-                    $nbParams = count($params);
-                    if ($nbParams === ($nbFragUrl - ($i + 1)))
+                    foreach (self::$routes[$typeRequestHTTP][$resource] as $controllerParams => $controllerRoute)
                     {
-                        if ($nbParams)
+                        $response['params'] = array();
+                        $params = (empty($controllerParams)) ? array() : explode('/', $controllerParams);
+                        $nbParams = count($params);
+                        if ($nbParams === ($nbFragUrl - ($i + 1)))
                         {
-                            $j = $i + 1;
-                            foreach ($params as $param)
+                            if ($nbParams)
                             {
-                                $aParam = explode(':', $param);
-                                if ($aParam[0][0] !== '$')
+                                $j = $i + 1;
+                                foreach ($params as $param)
                                 {
-                                    if ($aParam[0] !== $aFragUrl[$j])
+                                    $aParam = explode(':', $param);
+                                    if ($aParam[0][0] !== '$')
+                                    {
+                                        if ($aParam[0] !== $aFragUrl[$j])
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    else if (!array_key_exists(1, $aParam) || preg_match("/^{$aParam[1]}$/", $aFragUrl[$j]))
+                                    {
+                                        $response['params'][ltrim($aParam[0], '$')] = $aFragUrl[$j];
+                                    }
+                                    else
                                     {
                                         break;
                                     }
+                                    ++$j;
                                 }
-                                else if (!array_key_exists(1, $aParam) || preg_match("/^{$aParam[1]}$/", $aFragUrl[$j]))
+                                if ($j === $nbFragUrl)
                                 {
-                                    $response['params'][ltrim($aParam[0], '$')] = $aFragUrl[$j];
+                                    return self::setController($response, $controllerRoute);
                                 }
-                                else
-                                {
-                                    break;
-                                }
-                                ++$j;
                             }
-                            if ($j === $nbFragUrl)
+                            else
                             {
                                 return self::setController($response, $controllerRoute);
                             }
-                        }
-                        else
-                        {
-                            return self::setController($response, $controllerRoute);
                         }
                     }
                 }
