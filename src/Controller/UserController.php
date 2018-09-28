@@ -3,17 +3,18 @@
 namespace src\Controller;
 
 use Core\Controller;
+use Core\Response\Redirect;
+use Core\Response\JSON;
 
 class                           UserController extends Controller
 {
-    public function             index()
+    public function             me()
     {
-        echo __METHOD__;
+        return new Redirect("/user/42");
     }
     
-    public function             me($id)
+    public function             show($id)
     {
-        echo __METHOD__ . PHP_EOL;
-        echo "id = $id";
+        return new JSON(array('id' => $id));
     }
 }

@@ -4,6 +4,8 @@ namespace Core;
 
 class                           Request
 {
+    static private              $_isAlreadyParse = false;
+    
     private                     $_typeHTTP;
     private                     $_params;
 
@@ -11,13 +13,18 @@ class                           Request
     {
         $this->_typeHTTP = strtoupper($typeHTTP);
         $this->_params = $requestParam;
-        if (empty($this->_params))
+        if (self::$_isAlreadyParse === false)
         {
             $parse = "parse{$this->_typeHTTP}";
             if (method_exists($this, $parse))
             {
                 $this->$parse();
             }
+            else
+            {
+                $this->parseFromInput();
+            }
+            self::$_isAlreadyParse = true;
         }
     }
     
@@ -31,13 +38,17 @@ class                           Request
         return boolval(!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest');
     }
     
-    public function             input($keys)
+    public function             input($keys = null)
     {
+        if ($keys === null)
+        {
+            return $this->_params;
+        }
         if (is_string($keys))
         {
             return $this->_params[$keys];
         }
-        else if (is_array($keys))
+        if (is_array($keys))
         {
             $input = array();
             foreach ($keys as $key)
@@ -76,7 +87,7 @@ class                           Request
         foreach ($array as $key => $value)
         {
             $this->_params[$key] = trim(stripslashes(htmlspecialchars($value)));
-        }
+        }        
     }
     
     private function            parseGET()
@@ -94,16 +105,6 @@ class                           Request
         $inputData = file_get_contents('php://input');
         $datas = array();
         parse_str($inputData, $datas);
-        return $datas;
-    }
-
-    private function            parsePUT()
-    {
-        $this->parse($this->parseFromInput());
-    }
-    
-    private function            parseDELETE()
-    {
-        $this->parse($this->parseFromInput());
+        $this->parse($datas);
     }
 }
