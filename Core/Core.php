@@ -77,6 +77,8 @@ class                           Core
     {
         Router::get('/', function ()
         {
+            TemplateEngine::parse('User');
+            exit;
             return 'Welcome to my framework PHP';
         });
         
@@ -88,7 +90,7 @@ class                           Core
         }
         catch (\Exception $ex)
         {
-            $response = new Response($ex->getMessage());
+            $response = new Response($ex->getMessage(), 500);
         } 
         $response->render();
     }
